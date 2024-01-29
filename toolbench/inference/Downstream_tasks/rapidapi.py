@@ -401,12 +401,12 @@ class pipeline_runner:
         args = self.args
         if args.backbone_model == "toolllama":
             # ratio = 4 means the sequence length is expanded by 4, remember to change the model_max_length to 8192 (2048 * ratio) for ratio = 4
-            ratio = int(args.max_sequence_length/args.max_source_sequence_length)
+            ratio = 4# int(args.max_sequence_length/args.max_source_sequence_length)
             replace_llama_with_condense(ratio=ratio)
             if args.lora:
                 backbone_model = ToolLLaMALoRA(base_name_or_path=args.model_path, model_name_or_path=args.lora_path, max_sequence_length=args.max_sequence_length)
             else:
-                backbone_model = ToolLLaMA(model_name_or_path=args.model_path, max_sequence_length=args.max_sequence_length)
+                backbone_model = ToolLLaMA(model_name_or_path=args.model_path, max_sequence_length=8192)#args.max_sequence_length)
         else:
             backbone_model = args.backbone_model
         return backbone_model
@@ -488,8 +488,10 @@ class pipeline_runner:
             if server: print("Warning: no callbacks are defined for server mode")
             callbacks = []
         splits = output_dir_path.split("/")
-        os.makedirs("/".join(splits[:-1]),exist_ok=True)
-        os.makedirs("/".join(splits),exist_ok=True)
+        if len(splits) > 1:
+            os.makedirs("/".join(splits[:-1]),exist_ok=True)
+            os.makedirs("/".join(splits),exist_ok=True)
+        print(splits, output_dir_path, len(splits))
         output_file_path = os.path.join(output_dir_path,f"{query_id}_{method}.json")
         if (not server) and os.path.exists(output_file_path):
             return
@@ -519,6 +521,7 @@ class pipeline_runner:
             chain=chain.terminal_node[0].messages,
             outputs=chain.terminal_node[0].description,
         ) for callback in callbacks]
+        print("writing result to file... \n\n", output_dir_path)
         if output_dir_path is not None:
             with open(output_file_path,"w") as writer:
                 data = chain.to_json(answer=True,process=True)

@@ -1,0 +1,14 @@
+#!/bin/sh
+export PYTHONPATH=./
+python toolbench/inference/toolbench_server.py \
+    --tool_root_dir data/toolenv/tools/ \
+    --corpus_tsv_path data/retrieval/G1/corpus.tsv \
+    --retrieval_model_path /opt/models/ToolBench/ToolBench_IR_bert_based_uncased \
+    --retrieved_api_nums 5 \
+    --backbone_model toolllama \
+    --model_path /opt/models/ToolBench/ToolLLaMA-2-7b-v2 \
+    --max_observation_length 1024 \
+    --method DFS_woFilter_w2 \
+    --use_rapidapi_key \
+    --input_query_file data/test_instruction/G1_instruction.json \
+    --rapidapi_key $RAPIDAPIKEY

@@ -11,6 +11,7 @@ from transformers.generation.logits_process import (
     TopKLogitsWarper,
     TopPLogitsWarper,
 )
+from transformers import TextStreamer
 
 # For DFS
 def softmax_bias(answers,temperature=1):
@@ -58,6 +59,31 @@ def generate_stream(
     model, tokenizer, params, device, context_len=8192, stream_interval=2, force_generate=False
 ):
     prompt = params["prompt"]
+    device = "cpu"
+    input_ids = [ tokenizer(prompt).input_ids ]
+    # streamer = TextStreamer(tokenizer)
+    result = model.generate(
+            torch.tensor(input_ids, device=device),
+            # streamer=streamer,
+            max_new_tokens=256,
+            ctx_size=8192,
+            n_batch=8192
+    )
+    new_tokens = result[0][-len(input_ids[0]):]
+    print(tokenizer.decode(new_tokens, skip_special_tokens=True))
+    yield {
+                "text": tokenizer.decode(new_tokens, skip_special_tokens=True),
+                "usage": {
+                    "prompt_tokens": len(input_ids[0]),
+                    "completion_tokens": len(result[0]) - len(input_ids[0]),
+                    "total_tokens": len(result[0]),
+                },
+                "finish_reason": None,
+            }
+    gc.collect()
+    torch.cuda.empty_cache()
+    return
+
     len_prompt = len(prompt)
     temperature = float(params.get("temperature", 1.0))
     repetition_penalty = float(params.get("repetition_penalty", 1.0))
@@ -73,7 +99,7 @@ def generate_stream(
         temperature, repetition_penalty, top_p, top_k
     )
 
-    input_ids = tokenizer(prompt).input_ids
+    print(len(input_ids))
     input_echo_len = len(input_ids)
     output_ids = list(input_ids)
 
@@ -82,7 +108,7 @@ def generate_stream(
     else:
         max_src_len = context_len - max_new_tokens - 8
 
-    input_ids = input_ids[-max_src_len:]
+    # input_ids = input_ids[-max_src_len:]
 
     if model.config.is_encoder_decoder:
         encoder_output = model.encoder(
@@ -96,7 +122,9 @@ def generate_stream(
 
     past_key_values = out = None
     for i in range(max_new_tokens):
-        if i == 0:
+        if True:
+            last_token_logits = model(torch.as_tensor([input_ids], device=device), use_cache=True, ctx_size=8192, n_batch=8192)
+        elif i == 0:
             if model.config.is_encoder_decoder:
                 out = model.decoder(
                     input_ids=start_ids,
@@ -105,9 +133,10 @@ def generate_stream(
                 )
                 logits = model.lm_head(out[0])
             else:
-                out = model(torch.as_tensor([input_ids], device=device), use_cache=True)
-                logits = out.logits
-            past_key_values = out.past_key_values
+                out = model(torch.as_tensor([input_ids], device=device), use_cache=True, ctx_size=8192, n_batch=8192)
+                print(out)
+                logits = [out]# .logits
+            past_key_values = out#.past_key_values
         else:
             if model.config.is_encoder_decoder:
                 out = model.decoder(
@@ -121,13 +150,16 @@ def generate_stream(
             else:
                 out = model(
                     input_ids=torch.as_tensor([[token]], device=device),
+                    model_path="/opt/models/ToolBench/ToolLLaMA-2-7b-v2/",
                     use_cache=True,
-                    past_key_values=past_key_values,
+                    past_key_values=past_key_values,    n_ctx=8192
                 )
                 logits = out.logits
             past_key_values = out.past_key_values
 
-        if logits_processor:
+        if True:
+            pass
+        elif logits_processor:
             if repetition_penalty > 1.0:
                 tmp_output_ids = torch.as_tensor([output_ids], device=logits.device)
             else:
@@ -143,10 +175,19 @@ def generate_stream(
         if temperature < 1e-5 or top_p < 1e-8:  # greedy
             token = int(torch.argmax(last_token_logits))
         else:
-            probs = torch.softmax(last_token_logits, dim=-1)
+            probs = torch.softmax(torch.tensor(last_token_logits), dim=-1)
             token = int(torch.multinomial(probs, num_samples=1))
 
         output_ids.append(token)
+        input_ids.append(token)
+
+        gc.collect()
+        torch.cuda.empty_cache()
+        print(tokenizer.decode(
+                output_ids,
+                skip_special_tokens=True,
+                spaces_between_special_tokens=False,
+            ))
 
         if token in stop_token_ids:
             stopped = True
@@ -215,7 +256,7 @@ def generate_stream(
     }
 
     # clean
-    del past_key_values, out
+    del past_key_values
     gc.collect()
     torch.cuda.empty_cache()
 

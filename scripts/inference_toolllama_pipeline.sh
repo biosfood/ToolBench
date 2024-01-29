@@ -7,11 +7,11 @@ mkdir $OUTPUT_DIR
 python toolbench/inference/qa_pipeline.py \
     --tool_root_dir data/toolenv/tools/ \
     --backbone_model toolllama \
-    --model_path toolllama \
+    --model_path /opt/models/ToolBench/ToolLLaMA-2-7b-v2/ \
     --max_observation_length 1024 \
     --observ_compress_method truncate \
     --method DFS_woFilter_w2 \
     --input_query_file data/instruction/inference_query_demo.json \
     --output_answer_file $OUTPUT_DIR \
-    --toolbench_key $TOOLBENCH_KEY
+    --max_sequence_length 8192
 

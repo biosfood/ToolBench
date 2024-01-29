@@ -1,10 +1,13 @@
 import time
 import pandas as pd
-from sentence_transformers import SentenceTransformer, util
+from sentence_transformers import util # ,SentenceTransformer
 import json
 import re
 from toolbench.utils import standardize, standardize_category, change_name, process_retrieval_ducoment
 
+from intel_extension_for_transformers.langchain.embeddings.optimized_sentence_transformers import OptimizedSentenceTransformer
+import os
+import torch
 
 class ToolRetriever:
     def __init__(self, corpus_tsv_path = "", model_path=""):
@@ -12,7 +15,11 @@ class ToolRetriever:
         self.model_path = model_path
         self.corpus, self.corpus2tool = self.build_retrieval_corpus()
         self.embedder = self.build_retrieval_embedder()
-        self.corpus_embeddings = self.build_corpus_embeddings()
+        if os.path.exists("corpus_embeddings.pt"):
+            self.corpus_embeddings = torch.load("corpus_embeddings.pt")
+        else:
+            self.corpus_embeddings = self.build_corpus_embeddings()
+            torch.save(self.corpus_embeddings, "corpus_embeddings.pt")
         
     def build_retrieval_corpus(self):
         print("Building corpus...")
@@ -24,7 +31,7 @@ class ToolRetriever:
 
     def build_retrieval_embedder(self):
         print("Building embedder...")
-        embedder = SentenceTransformer(self.model_path)
+        embedder = OptimizedSentenceTransformer(self.model_path)
         return embedder
     
     def build_corpus_embeddings(self):

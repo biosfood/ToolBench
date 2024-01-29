@@ -8,12 +8,14 @@ from typing import Optional
 import torch
 from transformers import (
     AutoTokenizer,
-    AutoModelForCausalLM,
+    #    AutoModelForCausalLM,
 )
 from toolbench.utils import process_system_message
 from toolbench.model.model_adapter import get_conversation_template
 from toolbench.inference.utils import SimpleChatIO, generate_stream, react_parser
 
+# from intel_extension_for_transformers.transformers import AutoModelForCausalLM
+from intel_extension_for_transformers.transformers import AutoModelForCausalLM
 
 class ToolLLaMA:
     def __init__(
@@ -30,14 +32,15 @@ class ToolLLaMA:
         self.max_sequence_length = max_sequence_length
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, use_fast=False, model_max_length=self.max_sequence_length)
         self.model = AutoModelForCausalLM.from_pretrained(
-            model_name_or_path, low_cpu_mem_usage=True
+            "/opt/models/ToolBench/ToolLLaMA-2-7b-v2/", load_in_4bit=True#, torch_dtype=torch.qint8
+            , n_ctx=8192
         )
         if self.tokenizer.pad_token_id == None:
             self.tokenizer.add_special_tokens({"bos_token": "<s>", "eos_token": "</s>", "pad_token": "<pad>"})
             self.model.resize_token_embeddings(len(self.tokenizer))
         self.use_gpu = (True if device == "cuda" else False)
-        if (device == "cuda" and not cpu_offloading) or device == "mps":
-            self.model.to(device)
+        # if (device == "cuda" and not cpu_offloading) or device == "mps":
+        #     self.model.to(device)
         self.chatio = SimpleChatIO()
 
     def prediction(self, prompt: str, stop: Optional[List[str]] = None) -> str:
@@ -140,4 +143,3 @@ to interact with the game, and the total process of a input use 3 steps of call,
 
     llm.change_messages(messages)
     output = llm.parse(functions=functions)
-    print(output)
